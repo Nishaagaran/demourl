@@ -36,3 +36,4 @@ public interface RetailRepository extends JpaRepository<Retail, Long> {
 }
 
 
+
