@@ -24,15 +24,19 @@ pipeline {
             steps {
                 echo 'Checking out source code from repository...'
                 script {
-                    checkout scm
-                    // Ensure we're on the main branch
-                    sh 'git checkout main || git checkout -b main origin/main || true'
+                    // Explicitly checkout main branch
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: '*/main']],
+                        extensions: [],
+                        userRemoteConfigs: scm.userRemoteConfigs
+                    ])
                     def gitCommit = sh(
                         script: 'git rev-parse --short HEAD',
                         returnStdout: true
                     ).trim()
                     env.GIT_COMMIT_SHORT = gitCommit
-                    echo "Checked out commit: ${env.GIT_COMMIT_SHORT}"
+                    echo "Checked out commit: ${env.GIT_COMMIT_SHORT} on branch main"
                 }
             }
             post {
