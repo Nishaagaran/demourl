@@ -13,8 +13,8 @@ pipeline {
     }
     
     environment {
-        JAVA_HOME = tool 'JDK-17'
-        MAVEN_HOME = tool 'Maven-3'
+        JAVA_HOME = tool 'JDK17'
+        MAVEN_HOME = tool 'Maven3'
         PATH = "${MAVEN_HOME}/bin:${JAVA_HOME}/bin:${env.PATH}"
         MAVEN_OPTS = '-Xmx1024m -XX:MaxPermSize=512m'
     }
