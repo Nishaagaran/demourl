@@ -1,0 +1,125 @@
+pipeline {
+    agent {
+        docker {
+            image 'maven:3.9.5-eclipse-temurin-17'
+            args '-v /root/.m2:/root/.m2'
+        }
+    }
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+        timestamps()
+    }
+    
+    environment {
+        MAVEN_OPTS = '-Xmx1024m -XX:MaxPermSize=512m'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out source code from repository...'
+                script {
+                    checkout scm
+                    // Ensure we're on the main branch
+                    sh 'git checkout main || git checkout -b main origin/main || true'
+                    def gitCommit = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                    env.GIT_COMMIT_SHORT = gitCommit
+                    echo "Checked out commit: ${env.GIT_COMMIT_SHORT}"
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                echo 'Building the application with Maven...'
+                script {
+                    sh '''
+                        echo "Java Version:"
+                        java -version
+                        echo "Maven Version:"
+                        mvn -version
+                        echo "Building project..."
+                        mvn clean compile -DskipTests
+                    '''
+                }
+            }
+            post {
+                success {
+                    echo 'Build stage completed successfully'
+                }
+                failure {
+                    error 'Build failed'
+                }
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                echo 'Running unit tests...'
+                script {
+                    sh '''
+                        echo "Running Maven tests..."
+                        mvn test
+                    '''
+                }
+            }
+            post {
+                always {
+                    echo 'Publishing test results...'
+                    junit 'target/surefire-reports/*.xml'
+                }
+                success {
+                    echo 'All tests passed successfully'
+                }
+                failure {
+                    echo 'Some tests failed'
+                }
+            }
+        }
+        
+        stage('Package') {
+            steps {
+                echo 'Packaging the application...'
+                script {
+                    sh '''
+                        echo "Creating JAR package..."
+                        mvn package -DskipTests
+                    '''
+                }
+            }
+            post {
+                success {
+                    echo 'Package created successfully'
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo 'Pipeline execution completed'
+        }
+        success {
+            echo 'Pipeline succeeded!'
+            script {
+                def buildInfo = """
+                    Build Information:
+                    - Build Number: ${env.BUILD_NUMBER}
+                    - Git Commit: ${env.GIT_COMMIT_SHORT ?: 'N/A'}
+                    - Build Status: SUCCESS
+                """
+                echo buildInfo
+            }
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+}
+

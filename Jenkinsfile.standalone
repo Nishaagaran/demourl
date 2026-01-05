@@ -1,0 +1,125 @@
+pipeline {
+    agent any
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+        timestamps()
+    }
+    
+    environment {
+        // Update these paths according to your system
+        JAVA_HOME = '/usr/lib/jvm/java-17-openjdk'  // Linux
+        // JAVA_HOME = 'C:\\Program Files\\Java\\jdk-17'  // Windows
+        MAVEN_VERSION = '3.9.5'
+        MAVEN_HOME = "${WORKSPACE}/.maven"
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out source code from repository...'
+                script {
+                    checkout scm
+                    // Ensure we're on the main branch
+                    sh 'git checkout main || git checkout -b main origin/main || true'
+                    def gitCommit = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                    env.GIT_COMMIT_SHORT = gitCommit
+                    echo "Checked out commit: ${env.GIT_COMMIT_SHORT}"
+                }
+            }
+        }
+        
+        stage('Setup Tools') {
+            steps {
+                echo 'Setting up Java and Maven...'
+                script {
+                    sh '''
+                        echo "Java Version:"
+                        java -version || echo "Java not found in PATH"
+                        echo "Maven Version:"
+                        mvn -version || echo "Maven not found in PATH"
+                    '''
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                echo 'Building the application with Maven...'
+                script {
+                    sh '''
+                        echo "Building project..."
+                        mvn clean compile -DskipTests
+                    '''
+                }
+            }
+            post {
+                success {
+                    echo 'Build stage completed successfully'
+                }
+                failure {
+                    error 'Build failed'
+                }
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                echo 'Running unit tests...'
+                script {
+                    sh '''
+                        echo "Running Maven tests..."
+                        mvn test
+                    '''
+                }
+            }
+            post {
+                always {
+                    echo 'Publishing test results...'
+                    junit 'target/surefire-reports/*.xml'
+                }
+                success {
+                    echo 'All tests passed successfully'
+                }
+                failure {
+                    echo 'Some tests failed'
+                }
+            }
+        }
+        
+        stage('Package') {
+            steps {
+                echo 'Packaging the application...'
+                script {
+                    sh '''
+                        echo "Creating JAR package..."
+                        mvn package -DskipTests
+                    '''
+                }
+            }
+            post {
+                success {
+                    echo 'Package created successfully'
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo 'Pipeline execution completed'
+        }
+        success {
+            echo 'Pipeline succeeded!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+}
+
